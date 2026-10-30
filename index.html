@@ -182,7 +182,18 @@ work.height=240;
 const wctx=work.getContext("2d",{willReadFrequently:true});
 
 const colors=["#facc15","#4ade80","#38bdf8"];
-const zones=[[.05,.33],[.36,.64],[.67,.95]];
+
+// SMALL DETECTION BOXES
+// Each box is 10% of camera width and 10% of camera height.
+// Change these values later if the boxes do not fit the track.
+const zones=[
+  [.14,.24],  // Lane 1
+  [.45,.55],  // Lane 2
+  [.76,.86]   // Lane 3
+];
+const zoneTop=.45;
+const zoneBottom=.55;
+
 const W=320,H=240;
 const MIN_LAP_MS=1000;
 const EMPTY_REQUIRED=3;
@@ -208,7 +219,6 @@ let laneActivity=[false,false,false];
 let celebrationTimer=null;
 let audioContext=null;
 let countdownToken=0;
-let raceGeneration=0;
 
 function setStatus(message){
   $("status").textContent=message;
@@ -251,7 +261,6 @@ function sound(freq=660,duration=.12){
 }
 
 function clearRace(){
-  raceGeneration++;
   countdownToken++;
   measuring=false;
   calibrating=false;
@@ -369,9 +378,9 @@ function drawOverlay(){
 
   zones.forEach(([a,b],i)=>{
     const x=a*width;
-    const y=.4*height;
+    const y=zoneTop*height;
     const w=(b-a)*width;
-    const h=.2*height;
+    const h=(zoneBottom-zoneTop)*height;
     ctx.strokeStyle=laneActivity[i]?"#ffffff":colors[i];
     ctx.lineWidth=laneActivity[i]?6:3;
     ctx.strokeRect(x,y,w,h);
@@ -438,7 +447,12 @@ function processFrame(t){
           const left=Math.floor(a*W);
           const right=Math.floor(b*W);
 
-          for(let y=96;y<144;y+=2){
+          // Detection uses the same small boxes
+          // shown in the camera preview.
+          const top=Math.floor(zoneTop*H);
+          const bottom=Math.floor(zoneBottom*H);
+
+          for(let y=top;y<bottom;y+=2){
             for(let x=left;x<right;x+=2){
               const k=y*W+x;
               total++;
@@ -446,7 +460,7 @@ function processFrame(t){
                  PIXEL_THRESHOLD)changed++;
             }
           }
-          changedRatios.push(changed/total);
+          changedRatios.push(total?changed/total:0);
         });
 
         const threshold=Number($("sensitivity").value)/100;
@@ -472,8 +486,6 @@ function processFrame(t){
           emptyFrames=0;
         }
 
-        // Slowly adapt to lighting changes only when
-        // no car is detected in the finish-line zones.
         if(!detected){
           for(let k=0;k<gray.length;k++){
             background[k]=background[k]*.997+gray[k]*.003;
